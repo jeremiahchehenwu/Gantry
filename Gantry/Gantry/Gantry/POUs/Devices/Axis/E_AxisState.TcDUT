@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="E_AxisState" Id="{a643d0bb-7a5d-4412-bb64-a0677e1bf5ed}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_AxisState :
+(
+	Off					:= 0, //Axis is off
+	Ready				:= 1, //Axis is ready/on
+	Moving				:= 2, //Axis is moving to commanded position
+	Stopping			:= 3, //Axis is stopping
+	Stopped				:= 4, //Axis is stopped
+	TurningOn			:= 5, //Axis is turning on
+	TurningOff			:= 6 //Axis is turning off
+) DINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

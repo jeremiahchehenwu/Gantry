@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="E_VFDCommand" Id="{35f0e72a-be7f-4567-b547-701315953d17}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_VFDCommand :
+(
+	None 		:= 0,
+	TurnOn		:= 1,
+	TurnOff		:= 2,
+	RunFwd		:= 3,
+	RunRev		:= 4,
+	Stop		:= 5
+) DINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

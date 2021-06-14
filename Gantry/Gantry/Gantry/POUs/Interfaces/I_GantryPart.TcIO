@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <Itf Name="I_GantryPart" Id="{c3f1e846-cf22-4441-911d-82affc0b3f71}">
+    <Declaration><![CDATA[INTERFACE I_GantryPart
+]]></Declaration>
+    <Property Name="PartPicked" Id="{ff0c925f-c073-4dbe-a44b-3bdecc4b0a18}">
+      <Declaration><![CDATA[PROPERTY PartPicked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d8dd96f9-71e8-4bae-a830-60376042fdeb}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="PartReady" Id="{225ba40e-ba68-419f-b5e2-445abf6deedc}">
+      <Declaration><![CDATA[PROPERTY PartReady : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2ae7c79e-0ac1-4342-9138-7900329562cc}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

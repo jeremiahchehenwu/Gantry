@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_Device" Id="{df461c38-08f6-480c-a85c-0958733e653b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Device
+VAR_INPUT
+	inpAutomatic		: BOOL;
+	inpSim				: BOOL := TRUE;
+	
+	cmdReset			: BOOL;
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="ModeAutomatic" Id="{15d02fd8-4ac5-4c34-9335-fe3f05621b5c}">
+      <Declaration><![CDATA[PROPERTY ModeAutomatic : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1cf7cdfc-1822-48eb-8dea-c7f604a7f1ff}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ModeAutomatic := inpAutomatic;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="ModeManual" Id="{0b60a1fd-cf81-4142-a5ec-0c4baff3125e}">
+      <Declaration><![CDATA[PROPERTY ModeManual : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d445e6da-51a0-4ea9-b1fd-0f122618dd5a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ModeManual := NOT inpAutomatic;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Device">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Device.ModeAutomatic.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Device.ModeManual.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

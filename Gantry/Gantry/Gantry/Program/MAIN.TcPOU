@@ -1,0 +1,169 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="MAIN" Id="{29acce46-73a2-4ef8-88bb-8b562e1e9f4d}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	inpSim					: BOOL := TRUE;
+	
+	PalletStation			: FB_PalletStation;
+	Part1Station			: FB_PartStation;
+	Part2Station			: FB_PartStation;
+	Gantry1					: FB_Gantry;
+	Gantry2					: FB_Gantry;
+	
+	Gantry1NextPlace		: DINT;
+	Gantry2NextPlace		: DINT;
+	
+	Start					: BOOL;
+	Abort					: BOOL;
+	Home					: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF inpSim THEN
+	Simulate();
+END_IF
+
+PalletStation(Axis := GVL_IO.PalletConveyor, 
+		inpPalletRecord := GVL_IO.PalletRecord,
+		inpActiveRecord := GVL_IO.ActiveRecord,
+		ipGantry1 := Gantry1, 
+		ipGantry2 := Gantry2);
+Part1Station(Axis := GVL_IO.PartConveyor1, 
+		ipGantry := Gantry1);
+Part2Station(Axis := GVL_IO.PartConveyor2, 
+		ipGantry := Gantry2);
+
+Gantry1(AxisX := GVL_IO.Gantry1X,
+		AxisZ := GVL_IO.Gantry1Z,
+		ipPart := Part1Station,
+		ipPallet := PalletStation,
+		inpPalletRecord := GVL_IO.PalletRecord,
+		inpActiveRecord := GVL_IO.ActiveRecord,
+		inpDataIndex1 := 1,
+		inpDataIndex2 := 2,
+		inpDataIndex3 := 3,
+		inpDataIndex4 := 4,
+		inpDataIndex5 := 5,
+		inpDataIndex6 := 6,
+		inpX_HomePos := 0,		
+		inpX_PickPos := 100,	
+		inpX_PlacePos1 := 2050,
+		inpX_PlacePos2 := 2100,
+		inpX_PlacePos3 := 2150,
+		inpX_PrePlacePos := 2000,
+		inpZ_HomePos := 0,
+		inpZ_PickPos := 3500,
+		inpZ_PlacePos := 3000,
+		inpZ_PrePickPos := 2500); //Positions are hardcoded to make simulation easier. Best practice would be to use an array with recipe management.
+
+Gantry2(AxisX := GVL_IO.Gantry2X,
+		AxisZ := GVL_IO.Gantry2Z,
+		ipPart := Part2Station,
+		ipPallet := PalletStation,
+		inpPalletRecord := GVL_IO.PalletRecord,
+		inpActiveRecord := GVL_IO.ActiveRecord,
+		inpDataIndex1 := 12,
+		inpDataIndex2 := 11,
+		inpDataIndex3 := 10,
+		inpDataIndex4 := 9,
+		inpDataIndex5 := 8,
+		inpDataIndex6 := 7,
+		inpX_HomePos := 0,		
+		inpX_PickPos := 100,	
+		inpX_PlacePos1 := 2700,
+		inpX_PlacePos2 := 2750,
+		inpX_PlacePos3 := 2800,
+		inpX_PrePlacePos := 1900,
+		inpZ_HomePos := 0,
+		inpZ_PickPos := 3500,
+		inpZ_PlacePos := 3000,
+		inpZ_PrePickPos := 2500); //Positions are hardcoded to make simulation easier. Best practice would be to use an array with recipe management.
+
+//Start all modules		
+IF Start THEN
+	PalletStation.cmd := E_PalletStationCommand.Start;
+	Part1Station.cmd := E_PartStationCommand.Start;
+	Part2Station.cmd := E_PartStationCommand.Start;
+	Gantry1.cmd := E_GantryCommand.TurnOn;
+	Gantry2.cmd := E_GantryCommand.TurnOn;
+	Start := FALSE;
+END_IF
+
+//Abort all modules
+IF Abort THEN
+	PalletStation.cmd := E_PalletStationCommand.Abort;
+	Part1Station.cmd := E_PartStationCommand.Abort;
+	Part2Station.cmd := E_PartStationCommand.Abort;
+	Gantry1.cmd := E_GantryCommand.Abort;
+	Gantry2.cmd := E_GantryCommand.Abort;
+	Abort := FALSE;
+END_IF
+
+//Home all modules
+IF Home THEN
+	IF (PalletStation.stsState = E_PalletStationState.Idle AND 
+		Gantry1.stsState = E_GantryState.Idle AND 
+		Gantry2.stsState = E_GantryState.Idle) 
+	THEN
+		PalletStation.cmd := E_PalletStationCommand.Home;
+		Gantry1.cmd := E_GantryCommand.Home;
+		Gantry2.cmd := E_GantryCommand.Home;
+		Home := FALSE;
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="Simulate" Id="{2bf22449-4829-4ed7-8533-2ed752c7bd4c}">
+      <Declaration><![CDATA[METHOD Simulate : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[GVL_IO.PalletRecord[5].ID := '12345';]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="MAIN">
+      <LineId Id="138" Count="0" />
+      <LineId Id="140" Count="1" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="193" Count="1" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="191" Count="1" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="132" Count="1" />
+      <LineId Id="187" Count="1" />
+      <LineId Id="87" Count="5" />
+      <LineId Id="94" Count="8" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="103" Count="1" />
+      <LineId Id="134" Count="1" />
+      <LineId Id="189" Count="1" />
+      <LineId Id="105" Count="15" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="123" Count="2" />
+      <LineId Id="127" Count="4" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="144" Count="7" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="205" Count="5" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="156" Count="0" />
+    </LineIds>
+    <LineIds Name="MAIN.Simulate">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

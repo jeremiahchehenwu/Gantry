@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_VFD" Id="{b040a135-ba00-415d-b1ae-a513fc0d4332}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_VFD EXTENDS FB_Device
+VAR_INPUT
+	cmd					: E_VFDCommand := E_VFDCommand.None;
+	
+	inpPowerOn			AT %I* : BOOL;
+	inpRunningFwd		AT %I* : BOOL;
+	inpRunningRev		AT %I* : BOOL;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_VFDState := E_VFDState.Off;
+	stsFaultCode		: DINT;
+
+	outPowerOn			AT %Q* : BOOL;	
+	outRunFwd			AT %Q* : BOOL;
+	outRunRev			AT %Q* : BOOL;
+END_VAR
+VAR
+	PowerOnTimer		: TON;
+	StartTimer			: TON;
+	StopTimer			: TON;
+	PowerOnSimTime		: TIME := T#3S;
+	StartSimTime		: TIME := T#3S;
+	StopSimTime			: TIME := T#3S;
+	PowerOnFailTime		: TIME := T#5S;
+	StartFailTime		: TIME := T#5S;
+	StopFailTime		: TIME := T#5S;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Faults();
+StateMachine();
+Control();]]></ST>
+    </Implementation>
+    <Method Name="Control" Id="{86ad2c94-6d36-4391-b534-87d89533a1d8}">
+      <Declaration><![CDATA[METHOD Control : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Faults" Id="{2d8d2d2f-5807-48bf-8285-9dba6e043a2f}">
+      <Declaration><![CDATA[METHOD Faults : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Simulate" Id="{fd5bdd21-5d99-42e3-a9c3-53adcf86cb03}">
+      <Declaration><![CDATA[METHOD Simulate : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{9647d82f-61fc-4cbe-87c1-f12327541d5d}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF inpSim THEN
+	Simulate();
+END_IF
+
+CASE stsState OF
+	E_VFDState.Off:
+		IF cmd = E_VFDCommand.TurnOn THEN
+			stsState := E_VFDState.TurningOn;
+		END_IF
+	E_VFDState.TurningOn:
+		IF inpPowerOn THEN
+			stsState := E_VFDState.Stopped;
+		END_IF
+	E_VFDState.Stopped:
+		IF cmd = E_VFDCommand.RunFwd THEN
+			stsState := E_VFDState.StartingFwd;
+		ELSIF cmd = E_VFDCommand.RunRev THEN
+			stsState := E_VFDState.StartingRev;
+		END_IF
+	E_VFDState.StartingFwd:
+		IF inpRunningFwd THEN
+			stsState := E_VFDState.RunningFwd;
+		END_IF
+	E_VFDState.StartingRev:
+		IF inpRunningRev THEN
+			stsState := E_VFDState.RunningRev;
+		END_IF
+	E_VFDState.RunningFwd:
+		IF cmd = E_VFDCommand.Stop THEN
+			stsState := E_VFDState.Stopping;
+		END_IF
+	E_VFDState.RunningRev:
+		IF cmd = E_VFDCommand.Stop THEN
+			stsState := E_VFDState.Stopping;
+		END_IF
+	E_VFDState.Stopping:
+		IF inpPowerOn AND (NOT inpRunningFwd AND NOT inpRunningRev) THEN
+			stsState := E_VFDState.Stopped;
+		END_IF
+	E_VFDState.TurningOff:
+		IF NOT inpPowerOn THEN
+			stsState := E_VFDState.Off;
+		END_IF
+END_CASE
+
+IF cmd = E_VFDState.TurningOff THEN
+	stsState := E_VFDState.TurningOff;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_VFD">
+      <LineId Id="32" Count="1" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VFD.Control">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VFD.Faults">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VFD.Simulate">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VFD.StateMachine">
+      <LineId Id="49" Count="3" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="9" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="21" Count="2" />
+      <LineId Id="25" Count="3" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="33" Count="3" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="37" Count="3" />
+      <LineId Id="45" Count="3" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="43" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

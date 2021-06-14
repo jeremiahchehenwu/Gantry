@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="E_PartStationCommand" Id="{3db5ebe8-0905-4cf7-b6f0-a115459d7e2f}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_PartStationCommand :
+(
+	None 			:= 0,
+	Start			:= 1,
+	Stop			:= 2,
+	Abort			:= 3
+) DINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

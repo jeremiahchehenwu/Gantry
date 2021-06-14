@@ -1,0 +1,142 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_Actuator" Id="{3cd68f66-e8c0-4a60-9389-8668b3a2b172}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Actuator EXTENDS FB_Device
+VAR_INPUT
+	cmd					: E_ActuatorCommand := E_ActuatorCommand.None;
+	
+	inpHome				AT %I* : BOOL;
+	inpWork				AT %I* : BOOL;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_ActuatorState := E_ActuatorState.AtHome;
+	stsFaultCode		: DINT;
+	
+	outHome				AT %Q* : BOOL;
+	outWork				AT %Q* : BOOL;
+END_VAR
+VAR
+	WorkTimer			: TON;
+	HomeTimer			: TON;
+	WorkSimTime			: TIME := T#2S;
+	HomeSimTime			: TIME := T#2S;
+	WorkFailTime		: TIME := T#10S;
+	HomeFailTime		: TIME := T#10S;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Faults();
+StateMachine();
+Control();]]></ST>
+    </Implementation>
+    <Method Name="Control" Id="{93764544-4736-43dc-9109-a4b0ef105662}">
+      <Declaration><![CDATA[METHOD Control : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[outHome := stsState = (E_ActuatorState.AtHome OR E_ActuatorState.GoingToHome);
+outWork := stsState = (E_ActuatorState.AtWork OR E_ActuatorState.GoingToWork);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Faults" Id="{38735c76-907a-4ab6-8cce-b9e2ca074fec}">
+      <Declaration><![CDATA[METHOD Faults : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[WorkTimer(IN := stsState = E_ActuatorState.GoingToWork, PT := WorkFailTime);
+HomeTimer(IN := stsState = E_ActuatorState.GoingToHome, PT := HomeFailTime);
+IF WorkTimer.Q THEN
+	stsFaultCode := 100;
+ELSIF HomeTImer.Q THEN
+	stsFaultCode := 200;
+ELSE
+	stsFaultCode := 0;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Simulate" Id="{0e859ce1-160c-4645-b9b6-f843fb29527f}">
+      <Declaration><![CDATA[METHOD Simulate : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[inpWork := outWork AND WorkTimer.ET >= WorkSimTime;
+inpHome := outHome AND HomeTimer.ET >= HomeSimTime;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{95e81728-9f5d-4f71-aa89-367478500cdc}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF inpSim THEN
+	Simulate();
+END_IF
+
+CASE stsState OF
+	E_ActuatorState.AtHome:
+		IF cmd = E_ActuatorCommand.Work THEN
+			stsState := E_ActuatorState.GoingToWork;
+		END_IF
+	E_ActuatorState.AtWork:
+		IF cmd = E_ActuatorCommand.Home THEN
+			stsState := E_ActuatorState.GoingToHome;
+		END_IF
+	E_ActuatorState.GoingToHome:
+		IF inpHome THEN
+			stsState := E_ActuatorState.AtHome;
+		ELSIF cmd = E_ActuatorCommand.Work THEN
+			stsState := E_ActuatorState.GoingToWork;
+		END_IF
+	E_ActuatorState.GoingToWork:
+		IF inpWork THEN
+			stsState := E_ActuatorState.AtWork;
+		ELSIF cmd = E_ActuatorCommand.Home THEN
+			stsState := E_ActuatorState.GoingToHome;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Actuator">
+      <LineId Id="36" Count="0" />
+      <LineId Id="31" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Actuator.Control">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Actuator.Faults">
+      <LineId Id="14" Count="1" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="3" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Actuator.Simulate">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Actuator.StateMachine">
+      <LineId Id="33" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="19" Count="2" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

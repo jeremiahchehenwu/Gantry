@@ -1,0 +1,156 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_RFID" Id="{e37777d5-682f-4821-a127-0aa1343bd3d1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RFID EXTENDS FB_Device
+VAR_INPUT
+	cmd					: E_RFIDCommand := E_RFIDCommand.None;
+	inpSimID			: STRING := '12345';
+	
+	inpID				AT %I* : STRING;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_RFIDState := E_RFIDState.Idle;
+	stsFaultCode		: DINT;
+	stsCurrentID		: STRING;
+	
+	outScan				AT %Q* : BOOL;
+	outResetScanner		AT %Q* : BOOL;
+END_VAR
+VAR
+	ReadTimer			: TON;
+	ReadSimTime			: TIME := T#5S;
+	ReadFailTime		: TIME := T#30S;
+END_VAR
+VAR CONSTANT
+	NULL_ID				: STRING := '';
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Faults();
+StateMachine();
+Control();]]></ST>
+    </Implementation>
+    <Method Name="Control" Id="{e99bc787-ec25-45fe-8ec4-b88288f601a9}">
+      <Declaration><![CDATA[METHOD Control : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[outScan := stsState = E_RFIDState.Reading;
+outResetScanner := stsState = E_RFIDState.Completing;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Faults" Id="{5fb03235-7ce4-4e94-b30b-b11285540766}">
+      <Declaration><![CDATA[METHOD Faults : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[ReadTimer(IN := stsState = E_RFIDState.Reading, PT := ReadFailTime);
+IF ReadTimer.Q THEN
+	stsFaultCode := 100;
+ELSE
+	stsFaultCode := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Simulate" Id="{e29c3a32-e4a7-4a46-ac28-92030b00d33a}">
+      <Declaration><![CDATA[METHOD Simulate : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF outScan AND ReadTimer.ET >= ReadSimTime THEN
+	inpID := inpSimID;
+END_IF
+
+IF outResetScanner THEN
+	inpID := NULL_ID;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{ed3a31f4-422a-4189-9a24-e0b9748aaeb1}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF inpSim THEN
+	Simulate();
+END_IF
+
+CASE stsState OF
+	E_RFIDState.Idle:
+		IF cmd = E_RFIDCommand.Clear THEN
+			stsState := E_RFIDState.Clearing;
+		ELSIF cmd = E_RFIDCommand.Read THEN
+			stsState := E_RFIDState.Reading;
+		END_IF
+	E_RFIDState.Clearing:
+		stsCurrentID := NULL_ID;
+		IF stsCurrentID = NULL_ID THEN
+			stsState := E_RFIDState.Idle;
+		END_IF
+	E_RFIDState.Reading:
+		IF inpID <> NULL_ID THEN
+			stsCurrentID := inpID;
+			stsState := E_RFIDState.Completing;
+		ELSIF stsFaultCode <> 0 AND cmdReset THEN
+			stsState := E_RFIDState.Idle;
+		END_IF
+	E_RFIDState.Completing:
+		IF inpID = NULL_ID THEN
+			stsState := E_RFIDState.Idle;
+		END_IF
+END_CASE
+
+cmd := E_RFIDCommand.None;
+cmdReset := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_RFID">
+      <LineId Id="28" Count="1" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_RFID.Control">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_RFID.Faults">
+      <LineId Id="5" Count="2" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_RFID.Simulate">
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_RFID.StateMachine">
+      <LineId Id="31" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="10" Count="5" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="39" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

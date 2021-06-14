@@ -1,0 +1,578 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_Gantry" Id="{87b4792e-6bb9-438b-9c7c-ce879d852511}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Gantry EXTENDS FB_Module IMPLEMENTS I_GantryPallet,I_GantryPart
+VAR_INPUT
+	AxisX				: REFERENCE TO AXIS_REF;
+	AxisZ				: REFERENCE TO AXIS_REF;			
+	ipPallet			: I_GantryPallet;
+	ipPart				: I_GantryPart;
+	
+	cmd					: E_GantryCommand := E_GantryCommand.None;
+	
+	inpPalletRecord		: REFERENCE TO ARRAY[0..100] OF ST_PalletRecord;
+	inpActiveRecord		: REFERENCE TO DINT;
+	inpDataIndex1		: DINT;
+	inpDataIndex2		: DINT;
+	inpDataIndex3		: DINT;
+	inpDataIndex4		: DINT;
+	inpDataIndex5		: DINT;
+	inpDataIndex6		: DINT;
+	
+	inpX_HomePos		: LREAL;
+	inpX_PickPos		: LREAL;
+	inpX_PlacePos1		: LREAL;
+	inpX_PlacePos2		: LREAL;
+	inpX_PlacePos3		: LREAL;
+	inpX_PrePlacePos	: LREAL;
+	inpZ_HomePos		: LREAL;
+	inpZ_PickPos		: LREAL;
+	inpZ_PlacePos		: LREAL;
+	inpZ_PrePickPos		: LREAL;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_GantryState := E_GantryState.Idle;
+	stsCurrentStep		: DINT;
+END_VAR
+VAR
+	//Devices
+	X_Axis				: FB_Axis;
+	Z_Axis				: FB_Axis;
+	Magnet				: FB_Actuator;
+	Gripper				: FB_Actuator;
+	
+	rtTurningOn			: R_TRIG;
+	rtTurningOff		: R_TRIG;
+	rtPicking			: R_TRIG;
+	rtPlacing			: R_TRIG;
+	rtHoming			: R_TRIG;
+	rtPartPresent		: R_TRIG;
+
+	PalletConvReady		: BOOL;
+	PartConvReady		: BOOL;
+	
+	NextPlaceIndex		: DINT;
+	DataIndex1			: DINT;
+	DataIndex2			: DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Map();
+Status();
+StateMachine();]]></ST>
+    </Implementation>
+    <Method Name="Aborting" Id="{de7ea81f-126c-4e29-a0ab-1a2b3cc11ac5}">
+      <Declaration><![CDATA[METHOD Aborting : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[X_Axis.cmd := E_AxisCommand.Stop;
+Z_Axis.cmd := E_AxisCommand.Stop;
+stsCurrentStep := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Homing" Id="{16aef990-3b20-4bb5-a88f-abeeff253982}">
+      <Declaration><![CDATA[METHOD Homing : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	5000: //Gripper and magnets to home position
+		Magnet.cmd := E_ActuatorCommand.Home;
+		Gripper.cmd := E_ActuatorCommand.Home;
+		IF Magnet.stsState = E_ActuatorState.AtHome AND Gripper.stsState = E_ActuatorState.AtHome THEN
+			stsCurrentStep := 5010;
+		END_IF
+	5010: //Turn on axes
+		X_Axis.cmd := E_AxisCommand.TurnOn;
+		Z_Axis.cmd := E_AxisCommand.TurnOn;
+		IF X_Axis.stsState = E_AxisState.Ready AND Z_Axis.stsState = E_AxisState.Ready THEN
+			stsCurrentStep := 5020;
+		END_IF
+	5020: //Home z axis
+		Z_Axis.inpPosition := inpZ_HomePos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_HomePos THEN
+			stsCurrentStep := 5030;
+		END_IF
+	5030: //Home x-axis
+		X_Axis.inpPosition := inpX_HomePos;
+		X_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF X_Axis.stsPosition = inpX_HomePos THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Map" Id="{8b4f5864-5f1e-42a0-81c1-51dbd5fc830f}">
+      <Declaration><![CDATA[METHOD Map : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[X_Axis(Axis := AxisX, inpVelocity := 500.0, inpAcceleration := 100.0, inpDeceleration := 100.0);
+Z_Axis(Axis := AxisZ, inpVelocity := 500.0, inpAcceleration := 100.0, inpDeceleration := 100.0);
+Magnet();
+Gripper();
+
+//Handshakes with part conveyor and pallet conveyor
+PartConvReady := ipPart.PartReady;
+PalletConvReady := ipPallet.PalletReady;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="PalletReady" Id="{ff71749f-b0cb-444c-b6c4-531c834eb471}">
+      <Declaration><![CDATA[{warning 'add property implementation'}
+PROPERTY PalletReady : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{b3a44742-649d-491a-ad4f-f6228eb47b12}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PalletReady := X_Axis.stsPosition <= inpX_PrePlacePos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="PartPicked" Id="{64869d98-d654-41ed-b822-2c5fb1315785}">
+      <Declaration><![CDATA[{warning 'add property implementation'}
+PROPERTY PartPicked : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{921797ba-2079-4ee9-a2a3-a2ff946413fc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PartPicked := Gripper.stsState = E_ActuatorState.AtWork AND Magnet.stsState = E_ActuatorState.AtWork;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="PartReady" Id="{b1b8a545-5197-4d16-b4eb-dbe0f8fb2cf1}">
+      <Declaration><![CDATA[{warning 'add property implementation'}
+PROPERTY PartReady : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{a7b1f751-5fca-4caf-8f0f-5d789cd4c301}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PartReady := Z_Axis.stsPosition <= inpZ_PrePickPos OR X_Axis.stsPosition >= inpX_PrePlacePos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Picking" Id="{d0cff517-5029-4338-bff1-aacda5e3cf5a}">
+      <Declaration><![CDATA[METHOD Picking : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	3000: //Home z-axis
+		Z_Axis.inpPosition := inpZ_HomePos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_HomePos THEN
+			stsCurrentStep := 3010;
+		END_IF
+	3010: //X-axis to pick position
+		X_Axis.inpPosition := inpX_PickPos;
+		X_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF X_Axis.stsPosition = inpX_PickPos THEN
+			stsCurrentStep := 3020;
+		END_IF
+	3020: //Z-axis to pre-pick position
+		Z_Axis.inpPosition := inpZ_PrePickPos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_PrePickPos THEN
+			stsCurrentStep := 3030;
+		END_IF
+	3030: //Wait for the conveyor to be ready for pick
+		IF PartConvReady THEN
+			stsCurrentStep := 3040;
+		END_IF
+	3040: //Z-axis to pick position
+		Z_Axis.inpPosition := inpZ_PickPos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_PickPos THEN
+			stsCurrentStep := 3050;
+		END_IF
+	3050: //Engage magnets and close grippers
+		Magnet.cmd := E_ActuatorCommand.Work;
+		Gripper.cmd := E_ActuatorCommand.Work;
+		IF Magnet.stsState = E_ActuatorState.AtWork AND Gripper.stsState = E_ActuatorState.AtWork THEN
+			stsCurrentStep := 3060;
+		END_IF
+	3060: //Z-axis to home position
+		Z_Axis.inpPosition := inpZ_HomePos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_HomePos THEN
+			stsCurrentStep := 3070;
+		END_IF
+	3070: //X-axis to pre-place position
+		X_Axis.inpPosition := inpX_PrePlacePos;
+		X_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF X_Axis.stsPosition = inpX_PrePlacePos THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Placing" Id="{e8648710-b8d0-49da-b1c6-7a34c690644a}">
+      <Declaration><![CDATA[METHOD Placing : BOOL
+VAR_INPUT
+END_VAR
+VAR
+	X_PlacePos				: LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NextPlaceIndex = 1 THEN
+	X_PlacePos := inpX_PlacePos1;
+ELSIF NextPlaceIndex = 2 THEN
+	X_PlacePos := inpX_PlacePos2;
+ELSIF NextPlaceIndex = 3 THEN
+	X_PlacePos := inpX_PlacePos3;
+ELSE
+	X_PlacePos := 0;	
+END_IF
+
+CASE stsCurrentStep OF
+	4000: //Z-axis to home position
+		Z_Axis.inpPosition := inpZ_HomePos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_HomePos THEN
+			stsCurrentStep := 4010;
+		END_IF
+	4010: //X-axis to pre-place position
+		X_Axis.inpPosition := inpX_PrePlacePos;
+		X_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF X_Axis.stsPosition = inpX_PrePlacePos THEN
+			stsCurrentStep := 4020;
+		END_IF
+	4020: //Wait for pallet conveyor to be ready for place
+		IF PalletConvReady THEN
+			stsCurrentStep := 4030;
+		END_IF
+	4030: //X-axis to place position
+		X_Axis.inpPosition := X_PlacePos;
+		X_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF X_Axis.stsPosition = X_PlacePos THEN
+			stsCurrentStep := 4035;
+		END_IF
+	4035: //Z-axis to place position
+		Z_Axis.inpPosition := inpZ_PlacePos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_PlacePos THEN
+			stsCurrentStep := 4040;
+		END_IF
+	4040: //Disengage magnets and grippers
+		Magnet.cmd := E_ActuatorCommand.Home;
+		Gripper.cmd := E_ActuatorCommand.Home;
+		IF Magnet.stsState = E_ActuatorState.AtHome AND Gripper.stsState = E_ActuatorState.AtHome THEN
+			stsCurrentStep := 4050;
+		END_IF
+	4050: //Update data records corresponding to place locations
+		IF NextPlaceIndex = 1 THEN
+			DataIndex1 := inpDataIndex1;
+			DataIndex2 := inpDataIndex2;
+		ELSIF NextPlaceIndex = 2 THEN
+			DataIndex1 := inpDataIndex3;
+			DataIndex2 := inpDataIndex4;
+		ELSIF NextPlaceIndex = 3 THEN
+			DataIndex1 := inpDataIndex5;
+			DataIndex2 := inpDataIndex6;
+		END_IF
+		IF inpActiveRecord > 0 AND NextPlaceIndex > 0 THEN
+			inpPalletRecord[inpActiveRecord].Data[DataIndex1] := 'Part Loaded';
+			inpPalletRecord[inpActiveRecord].Data[DataIndex2] := 'Part Loaded';
+			stsCurrentStep := 4060;
+		END_IF
+	4060: //Z-axis to home position
+		Z_Axis.inpPosition := inpZ_HomePos;
+		Z_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF Z_Axis.stsPosition = inpZ_HomePos THEN
+			stsCurrentStep := 4070;
+		END_IF
+	4070: //Z-axis to pick position
+		X_Axis.inpPosition := inpX_PickPos;
+		X_Axis.cmd := E_AxisCommand.ExecuteMoveAbs;
+		IF X_Axis.stsPosition = inpX_PickPos THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{a92192dd-8ef5-42a9-8730-b39aff0e3c72}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsState OF
+	E_GantryState.Idle: //Module is idle waiting for command
+		IF cmd = E_GantryCommand.TurnOn THEN
+			stsState := E_GantryState.TurningOn;
+		ELSIF cmd = E_GantryCommand.Home THEN
+			stsState := E_GantryState.Homing;
+		END_IF
+	E_GantryState.TurningOn: //Turn on x and z servos
+		TurningOn();
+		IF stsCurrentStep = 0 AND X_Axis.stsState = E_AxisState.Ready AND Z_Axis.stsState = E_AxisState.Ready THEN
+			stsState := E_GantryState.Ready;
+		END_IF
+	E_GantryState.TurningOff: //Turn off x and z servos
+		TurningOff();
+		IF stsCurrentStep = 0 AND X_Axis.stsState = E_AxisState.Off AND Z_Axis.stsState = E_AxisState.Off THEN
+			stsState := E_GantryState.Idle;
+		END_IF
+	E_GantryState.Ready: //Gantry ready for command
+		IF cmd = E_GantryCommand.Pick THEN
+			stsState := E_GantryState.Picking;
+		ELSIF cmd = E_GantryCommand.Place THEN
+			stsState := E_GantryState.Placing;
+		END_IF
+	E_GantryState.Homing: //Return gantry to home position
+		Homing();
+		IF (stsCurrentStep = 0 AND
+			X_Axis.stsPosition = inpX_HomePos AND
+			Z_Axis.stsPosition = inpZ_HomePos AND
+			Gripper.stsState = E_ActuatorState.AtHome AND
+			Magnet.stsState = E_ActuatorState.AtHome) 
+		THEN
+			stsState := E_GantryState.Ready;
+		END_IF
+	E_GantryState.Picking: //Run pick routine
+		Picking();
+		IF (stsCurrentStep = 0 AND
+			X_Axis.stsPosition = inpX_PrePlacePos AND
+			Z_Axis.stsPosition = inpZ_HomePos AND
+			Gripper.stsState = E_ActuatorState.AtWork AND
+			Magnet.stsState = E_ActuatorState.AtWork) 
+		THEN
+			stsState := E_GantryState.Placing;
+		END_IF
+	E_GantryState.Placing: //Run place routine
+		Placing();
+		IF (stsCurrentStep = 0 AND
+			X_Axis.stsPosition = inpX_PickPos AND
+			Z_Axis.stsPosition = inpZ_HomePos AND
+			Gripper.stsState = E_ActuatorState.AtHome AND
+			Magnet.stsState = E_ActuatorState.AtHome) 
+		THEN
+			stsState := E_GantryState.Ready;
+		END_IF
+	E_GantryState.Aborting: //Abort current process
+		Aborting();
+		IF stsCurrentStep = 0 AND X_Axis.stsState <> E_AxisState.Moving AND X_Axis.stsState <> E_AxisState.Moving THEN
+			stsState := E_GantryState.Idle;
+		END_IF		
+END_CASE
+
+IF cmd = E_GantryCommand.Abort THEN
+	stsState := E_GantryState.Aborting;
+END_IF
+
+cmd := E_GantryCommand.None;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Status" Id="{a3168e67-7dd9-4660-bb6b-5656aaf11df5}">
+      <Declaration><![CDATA[METHOD Status : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Determine next place location depending on current data records
+IF inpPalletRecord[inpActiveRecord].Data[inpDataIndex1] = '' AND inpPalletRecord[inpActiveRecord].Data[inpDataIndex2] = '' THEN
+	NextPlaceIndex := 1;
+ELSIF inpPalletRecord[inpActiveRecord].Data[inpDataIndex3] = '' AND inpPalletRecord[inpActiveRecord].Data[inpDataIndex4] = '' THEN
+	NextPlaceIndex := 2;
+ELSIF inpPalletRecord[inpActiveRecord].Data[inpDataIndex5] = '' AND inpPalletRecord[inpActiveRecord].Data[inpDataIndex6] = '' THEN
+	NextPlaceIndex := 3;
+ELSE
+	NextPlaceIndex := 0;
+END_IF
+
+//If ready, auto command pick sequence
+IF inpActiveRecord <> 0 AND NextPlaceIndex > 0 AND stsState = E_GantryState.Ready THEN
+	stsState := E_GantryState.Picking;
+END_IF
+
+//State transition one shots
+rtTurningOn(CLK := stsState = E_GantryState.TurningOn);
+IF rtTurningOn.Q THEN
+	stsCurrentStep := 1000;
+END_IF
+
+rtTurningOff(CLK := stsState = E_GantryState.TurningOff);
+IF rtTurningOff.Q THEN
+	stsCurrentStep := 2000;
+END_IF
+
+rtPicking(CLK := stsState = E_GantryState.Picking);
+IF rtPicking.Q THEN
+	stsCurrentStep := 3000;
+END_IF
+
+rtPlacing(CLK := stsState = E_GantryState.Placing);
+IF rtPlacing.Q THEN
+	stsCurrentStep := 4000;
+END_IF
+
+rtHoming(CLK := stsState = E_GantryState.Homing);
+IF rtHoming.Q THEN
+	stsCurrentStep := 5000;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TurningOff" Id="{187df3eb-b465-470f-b642-06a737585c43}">
+      <Declaration><![CDATA[METHOD TurningOff : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	2000: //Turn off x and z axes
+		X_Axis.cmd := E_AxisCommand.TurnOff;
+		Z_Axis.cmd := E_AxisCommand.TurnOff;
+		IF X_Axis.stsState = E_AxisState.Off AND Z_Axis.stsState = E_AxisState.Off THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TurningOn" Id="{a92c3e70-d261-417c-8f74-e46b87d51caa}">
+      <Declaration><![CDATA[METHOD TurningOn : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	1000: //Turn on x and z axes
+		X_Axis.cmd := E_AxisCommand.TurnOn;
+		Z_Axis.cmd := E_AxisCommand.TurnOn;
+		IF X_Axis.stsState = E_AxisState.Ready AND Z_Axis.stsState = E_AxisState.Ready THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Gantry">
+      <LineId Id="9" Count="0" />
+      <LineId Id="170" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.Aborting">
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.Homing">
+      <LineId Id="53" Count="5" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="59" Count="4" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="8" Count="9" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.Map">
+      <LineId Id="9" Count="0" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="18" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.PalletReady.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.PartPicked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.PartReady.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.Picking">
+      <LineId Id="9" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="3" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="13" Count="4" />
+      <LineId Id="25" Count="5" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="31" Count="2" />
+      <LineId Id="36" Count="5" />
+      <LineId Id="34" Count="1" />
+      <LineId Id="42" Count="4" />
+      <LineId Id="49" Count="4" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="54" Count="4" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.Placing">
+      <LineId Id="172" Count="7" />
+      <LineId Id="114" Count="23" />
+      <LineId Id="185" Count="5" />
+      <LineId Id="138" Count="17" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="156" Count="1" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="158" Count="11" />
+      <LineId Id="18" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.StateMachine">
+      <LineId Id="237" Count="2" />
+      <LineId Id="309" Count="1" />
+      <LineId Id="241" Count="5" />
+      <LineId Id="253" Count="5" />
+      <LineId Id="291" Count="2" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="298" Count="0" />
+      <LineId Id="294" Count="0" />
+      <LineId Id="299" Count="1" />
+      <LineId Id="302" Count="6" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="270" Count="2" />
+      <LineId Id="276" Count="0" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="279" Count="1" />
+      <LineId Id="278" Count="0" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="281" Count="9" />
+      <LineId Id="274" Count="0" />
+      <LineId Id="259" Count="10" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.Status">
+      <LineId Id="45" Count="0" />
+      <LineId Id="6" Count="4" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="34" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="30" Count="3" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="25" Count="3" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="15" Count="8" />
+      <LineId Id="40" Count="4" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.TurningOff">
+      <LineId Id="11" Count="6" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gantry.TurningOn">
+      <LineId Id="17" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

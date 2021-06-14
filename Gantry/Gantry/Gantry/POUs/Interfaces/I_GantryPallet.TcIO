@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <Itf Name="I_GantryPallet" Id="{6444b687-f8da-4df8-a3c2-de42761437ff}">
+    <Declaration><![CDATA[INTERFACE I_GantryPallet
+]]></Declaration>
+    <Property Name="PalletReady" Id="{cb390074-6916-4864-a02e-789f49a16aca}">
+      <Declaration><![CDATA[PROPERTY PalletReady : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ed64a652-d2e7-4211-819d-6ca1d61eb595}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

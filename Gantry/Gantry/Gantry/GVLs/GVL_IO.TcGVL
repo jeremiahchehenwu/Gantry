@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <GVL Name="GVL_IO" Id="{86959d6a-baaa-453e-accd-b5693327bd8b}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL
+	Gantry1X			: AXIS_REF;
+	Gantry1Z			: AXIS_REF;
+	Gantry2X			: AXIS_REF;
+	Gantry2Z			: AXIS_REF;
+	PalletConveyor		: AXIS_REF;
+	PartConveyor1		: AXIS_REF;
+	PartConveyor2		: AXIS_REF;
+	
+	PalletRecord		: ARRAY[0..100] OF ST_PalletRecord;
+	ActiveRecord		: DINT;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="E_RFIDState" Id="{9d959571-646c-4bbc-8a64-3e2f629779ae}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_RFIDState :
+(
+	Idle			:= 0,
+	Clearing		:= 1,
+	Reading			:= 2,
+	Completing		:= 3
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

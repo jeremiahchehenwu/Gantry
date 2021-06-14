@@ -1,0 +1,284 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_PartStation" Id="{21b06fcb-7bab-4e72-a22c-2c772da71df6}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PartStation EXTENDS FB_Module IMPLEMENTS I_GantryPart
+VAR_INPUT
+	Axis				: REFERENCE TO AXIS_REF;
+	ipGantry			: I_GantryPart;
+	cmd					: E_PartStationCommand := E_PartStationCommand.None;
+	
+	inpSim				: BOOL := TRUE;
+	inpPartPresent		AT %I* : BOOL;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_PartStationState := E_PartStationState.Idle;
+	stsCurrentStep		: DINT;
+END_VAR
+VAR
+	//Devices
+	Conveyor			: FB_Axis;
+	
+	DebounceTimer		: TON;
+	DebounceTime		: TIME := T#500MS;
+	PP_DepartSimTimer	: TON;
+	PP_ArriveSimTimer	: TON;
+	
+	rtStarting			: R_TRIG;
+	rtStopping			: R_TRIG;
+	rtPartPresent		: R_TRIG;
+
+	GantryClear			: BOOL;
+	GantryPickComplete	: BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Map();
+Status();
+StateMachine();]]></ST>
+    </Implementation>
+    <Method Name="Aborting" Id="{d32ecc30-a2d1-4b92-b962-d7113a4121fc}">
+      <Declaration><![CDATA[METHOD Aborting : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Conveyor.cmd := E_AxisCommand.Stop;
+stsCurrentStep := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Map" Id="{55f3ddf8-6288-45e8-9b4b-1816ca7aeda6}">
+      <Declaration><![CDATA[METHOD Map : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Conveyor(Axis := Axis);
+
+DebounceTimer(IN := inpPartPresent, PT := DebounceTime);
+
+GantryClear := ipGantry.PartReady;
+GantryPickComplete := ipGantry.PartPicked;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="PartPicked" Id="{e872d0a9-9f22-470e-b8ca-d0cd5c4cc9e3}">
+      <Declaration><![CDATA[{warning 'add property implementation'}
+PROPERTY PartPicked : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{f5d103e5-a2a9-4368-abf3-2ba4a3438f1a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PartPicked := NOT inpPartPresent;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="PartReady" Id="{4c6a83d0-09fe-46a4-bcf8-e3248f24f1d6}">
+      <Declaration><![CDATA[{warning 'add property implementation'}
+PROPERTY PartReady : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{00d02a12-e6f3-4898-89f4-1c9cdfc5c0ee}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PartReady := inpPartPresent AND Conveyor.stsVelocity = 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Simulate" Id="{d878782c-2bce-4eb5-a19f-b52546e65167}">
+      <Declaration><![CDATA[METHOD Simulate : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rtPartPresent(CLK := GantryPickComplete);
+inpPartPresent R= rtPartPresent.Q;
+
+PP_ArriveSimTimer(IN := stsState = E_PartStationState.Running AND NOT inpPartPresent, PT := T#5S);
+inpPartPresent S= PP_ArriveSimTimer.Q;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Starting" Id="{89881208-c2af-4fe6-9318-93a8965acadf}">
+      <Declaration><![CDATA[METHOD Starting : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	1000: //Turn on conveyor servo
+		Conveyor.cmd := E_AxisCommand.TurnOn;
+		IF Conveyor.stsState = E_AxisState.Ready THEN
+			stsCurrentStep := 1010;
+		END_IF
+	1010: //Start conveyor at 100 mm/s (arbitrary value)
+		Conveyor.inpVelocity := 100;
+		Conveyor.cmd := E_AxisCommand.ExecuteMoveVel;
+		IF Conveyor.stsVelocity > 0 THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{40d31a89-e600-4fb9-8580-b0e24ab4d585}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF inpSim THEN
+	Simulate();
+END_IF
+
+CASE stsState OF
+	E_PartStationState.Idle: //Station is idle and ready for command
+		IF cmd = E_PartStationCommand.Start THEN
+			stsState := E_PartStationState.Starting;
+		END_IF
+	E_PartStationState.Starting: //Start conveyor and ready for parts
+		Starting();
+		IF stsCurrentStep = 0 AND Conveyor.stsVelocity > 0 THEN
+			stsState := E_PartStationState.Running;
+		END_IF
+	E_PartStationState.Running: //Running and waiting for part present sensor
+		IF DebounceTimer.Q THEN
+			Stopping();
+			stsState := E_PartStationState.Stopping;
+		END_IF
+	E_PartStationState.Stopping: //Stopping conveyor
+		Stopping();
+		IF stsCurrentStep = 0 AND Conveyor.stsVelocity = 0 THEN
+			stsState := E_PartStationState.Stopped;
+		END_IF
+	E_PartStationState.Stopped: //Conveyor stopped. waiting for part pick
+		IF NOT inpPartPresent AND GantryClear THEN
+			Starting();
+			stsState := E_PartStationState.Starting;
+		END_IF
+	E_PartStationState.Aborting: //Abort all station activity
+		Aborting();
+		IF stsCurrentStep = 0 AND Conveyor.stsVelocity = 0 THEN
+			stsState := E_PartStationState.Idle;
+		END_IF
+END_CASE
+
+IF cmd = E_PartStationCommand.Abort THEN
+	stsState := E_PartStationState.Aborting;
+END_IF
+
+cmd := E_PartStationCommand.None;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Status" Id="{1fe6d3c7-7eba-4770-861a-340f536e11cb}">
+      <Declaration><![CDATA[METHOD Status : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//State transition one shots
+rtStarting(CLK := stsState = E_PalletStationState.Starting);
+IF rtStarting.Q THEN
+	stsCurrentStep := 1000;
+END_IF
+
+rtStopping(CLK := stsState = E_PartStationState.Stopping);
+IF rtStopping.Q THEN
+	stsCurrentStep := 2000;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Stopping" Id="{d03b5ad8-5f22-479e-95d5-240a584b2e54}">
+      <Declaration><![CDATA[METHOD Stopping : BOOL
+VAR_INPUT
+END_VAR
+
+VAR
+	END_IFCASE: INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	2000: //Stop conveyor
+		Conveyor.cmd := E_AxisCommand.Stop;
+		IF Conveyor.stsVelocity = 0 THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_PartStation">
+      <LineId Id="39" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.Aborting">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.Map">
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="15" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.PartPicked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.PartReady.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.Simulate">
+      <LineId Id="17" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.Starting">
+      <LineId Id="9" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="34" Count="2" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.StateMachine">
+      <LineId Id="49" Count="3" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="31" Count="2" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="46" Count="2" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.Status">
+      <LineId Id="15" Count="0" />
+      <LineId Id="6" Count="8" />
+    </LineIds>
+    <LineIds Name="FB_PartStation.Stopping">
+      <LineId Id="29" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="19" Count="3" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

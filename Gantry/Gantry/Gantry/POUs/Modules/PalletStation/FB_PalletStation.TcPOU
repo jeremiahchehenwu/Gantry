@@ -1,0 +1,454 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_PalletStation" Id="{5588170d-2109-4a73-9f01-47cd58a5f839}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PalletStation EXTENDS FB_Module IMPLEMENTS I_GantryPallet
+VAR_INPUT
+	Axis				: REFERENCE TO AXIS_REF;
+	ipGantry1			: I_GantryPallet;
+	ipGantry2			: I_GantryPallet;
+	cmd					: E_PalletStationCommand := E_PalletStationCommand.None;
+	
+	inpPalletRecord		: REFERENCE TO ARRAY[0..100] OF ST_PalletRecord;
+	inpActiveRecord		: REFERENCE TO DINT;	
+	inpSim				: BOOL := TRUE;
+	inpPalletPresent	AT %I* : BOOL;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_PalletStationState := E_PalletStationState.Idle;
+	stsCurrentStep		: DINT;
+END_VAR
+VAR
+	//Devices
+	Conveyor			: FB_Axis;
+	PalletStop			: FB_Actuator;
+	RFID				: FB_RFID;
+	
+	DepartureTimer		: TON;
+	DepartureDelayTime	: TIME := T#3S;
+	PP_DepartSimTimer	: TON;
+	PP_ArriveSimTimer	: TON;
+	
+	rtStarting			: R_TRIG;
+	rtStopping			: R_TRIG;
+	rtHoming			: R_TRIG;
+	rtPalletPresent		: R_TRIG;
+
+	i					: DINT;	
+	j					: DINT;
+	Gantry1Clear		: BOOL;
+	Gantry2Clear		: BOOL;
+END_VAR
+VAR CONSTANT
+	NULL_RECORD			: ARRAY[1..100] OF STRING;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Map();
+Status();
+StateMachine();]]></ST>
+    </Implementation>
+    <Method Name="Aborting" Id="{307137c9-b7bf-4c89-9bbf-10b9561aedc3}">
+      <Declaration><![CDATA[METHOD Aborting : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Conveyor.cmd := E_AxisCommand.Stop;
+stsCurrentStep := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Homing" Id="{a84e6e5b-e2c2-4d0d-a14c-11d6c2c85e32}">
+      <Declaration><![CDATA[METHOD Homing : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	4000: //Clear RFID and active record
+		RFID.cmd := E_RFIDCommand.Clear;
+		inpActiveRecord := 0;
+		IF RFID.stsCurrentID = '' THEN
+			stsCurrentStep := 4010;
+		END_IF
+	4010: //Extend pallet stop
+		PalletStop.cmd := E_ActuatorCommand.Work;
+		IF PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsCurrentStep := 4020;
+		END_IF
+	4020: //Stop conveyor
+		Conveyor.cmd := E_AxisCommand.Stop;
+		IF Conveyor.stsVelocity = 0 THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Map" Id="{1d064eb5-c2a7-4c82-a039-8d10d4723f06}">
+      <Declaration><![CDATA[METHOD Map : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Conveyor(Axis := Axis);
+PalletStop();
+RFID();
+
+DepartureTimer(IN := stsCurrentStep = 3050 AND NOT inpPalletPresent, PT := DepartureDelayTime);
+
+Gantry1Clear := ipGantry1.PalletReady;
+Gantry2Clear := ipGantry2.PalletReady;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="PalletReady" Id="{7eee9fc2-7b02-4a0e-bf54-ce2641ef3ed1}">
+      <Declaration><![CDATA[{warning 'add property implementation'}
+PROPERTY PalletReady : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{b44be487-40dc-4043-9af0-370abe2c1740}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[PalletReady := inpPalletPresent AND Gantry1Clear AND Gantry2Clear AND PalletStop.stsState = E_ActuatorState.AtWork;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="Running" Id="{918a504f-8e24-4f70-a661-e59c95146542}">
+      <Declaration><![CDATA[METHOD Running : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	3000: //Read RFID
+		RFID.cmd := E_RFIDCommand.Read;
+		IF RFID.stsCurrentID <> '' THEN
+			stsCurrentStep := 3010;
+		END_IF
+	3010: //Clear associated data
+		FOR i := 1 TO 100 DO
+			IF inpPalletRecord[i].ID = RFID.stsCurrentID THEN
+				inpPalletRecord[i].Data := NULL_RECORD;
+				inpActiveRecord := i;
+				stsCurrentStep := 3020;
+			END_IF
+		END_FOR
+	3020: //Wait for all 12 records to populate
+		IF (inpPalletRecord[inpActiveRecord].Data[1] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[2] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[3] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[4] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[5] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[6] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[7] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[8] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[9] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[10] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[11] <> '' AND
+			inpPalletRecord[inpActiveRecord].Data[12] <> '')
+		THEN
+			inpActiveRecord := 0;
+			stsCurrentStep := 3030;
+		END_IF
+	3030: //Wait for gantries to clear station
+		IF Gantry1Clear AND Gantry2Clear THEN
+			stsCurrentStep := 3040;
+		END_IF
+	3040: //Release pallet
+		PalletStop.cmd := E_ActuatorCommand.Home;
+		IF PalletStop.stsState = E_ActuatorState.AtHome THEN
+			stsCurrentStep := 3050;
+		END_IF
+	3050: //Wait for pallet to leave
+		IF DepartureTimer.Q THEN
+			stsCurrentStep := 3060;
+		END_IF
+	3060: //Extend pallet stop
+		PalletStop.cmd := E_ActuatorCommand.Work;
+		IF PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsCurrentStep := 3070;
+		END_IF
+	3070: //Clear RFID
+		RFID.cmd := E_RFIDCommand.Clear;
+		IF RFID.stsCurrentID = '' THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Simulate" Id="{d72fc5d7-22e7-4fb4-be7a-6f1ca20d6a35}">
+      <Declaration><![CDATA[METHOD Simulate : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[PP_DepartSimTimer(IN := stsCurrentStep = 3050, PT := T#5S);
+inpPalletPresent R= PP_DepartSimTimer.Q;
+
+PP_ArriveSimTimer(IN := stsState = E_PalletStationState.Running AND NOT inpPalletPresent, PT := T#10S);
+inpPalletPresent S= PP_ArriveSimTimer.Q;
+	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Starting" Id="{212b0d79-875f-4a91-bcfc-7910befee0c7}">
+      <Declaration><![CDATA[METHOD Starting : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	1000: //Clear RFID
+		RFID.cmd := E_RFIDCommand.Clear;
+		IF RFID.stsCurrentID = '' THEN
+			stsCurrentStep := 1010;
+		END_IF
+	1010: //Extend pallet stop
+		PalletStop.cmd := E_ActuatorCommand.Work;
+		IF PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsCurrentStep := 1020;
+		END_IF
+	1020: //Turn on conveyor
+		Conveyor.cmd := E_AxisCommand.TurnOn;
+		IF Conveyor.stsState = E_AxisState.Ready THEN
+			stsCurrentStep := 1030;
+		END_IF
+	1030: //Run conveyor at 100 mm/s (arbitrary value for project)
+		Conveyor.inpVelocity := 100;
+		Conveyor.cmd := E_AxisCommand.ExecuteMoveVel;
+		IF Conveyor.stsVelocity > 0 THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{25eb7868-e248-4632-b391-42aa626a08bc}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF inpSim THEN
+	Simulate();
+END_IF
+
+CASE stsState OF
+	E_PalletStationState.Idle: //Station idle and ready for command
+		IF cmd = E_PalletStationCommand.Start THEN
+			stsState := E_PalletStationState.Starting;
+		ELSIF cmd = E_PalletStationCommand.Home THEN
+			stsState := E_PalletStationState.Homing;
+		END_IF
+	E_PalletStationState.Homing: //Return station to home state
+		Homing();
+		IF stsCurrentStep = 0 AND PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsState := E_PalletStationState.Idle;
+		END_IF
+	E_PalletStationState.Starting: //Start conveyor and ready to process
+		Starting();
+		IF stsCurrentStep = 0 AND Conveyor.stsVelocity > 0 AND PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsState := E_PalletStationState.Running;
+		END_IF
+	E_PalletStationState.Running: //Station is running and ready to receive pallet
+		Running();
+		IF cmd = E_PalletStationCommand.Stop THEN
+			Stopping();
+			stsState := E_PalletStationState.Stopping;
+		END_IF
+	E_PalletStationState.Stopping: //Station is stopping
+		Stopping();
+		IF stsCurrentStep = 0 AND Conveyor.stsVelocity = 0 AND PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsState := E_PalletStationState.Idle;
+		END_IF
+	E_PalletStationState.Aborting: //Abort all station activity
+		Aborting();
+		IF stsCurrentStep = 0 AND Conveyor.stsVelocity = 0 THEN
+			stsState := E_PalletStationState.Idle;
+		END_IF		
+END_CASE
+
+IF cmd = E_PalletStationCommand.Abort THEN
+	stsState := E_PalletStationState.Aborting;
+END_IF
+
+cmd := E_PalletStationCommand.None;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Status" Id="{e3cb56af-697a-48ef-8b91-167b8b67fb5d}">
+      <Declaration><![CDATA[METHOD Status : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//State transition one shots
+rtStarting(CLK := stsState = E_PalletStationState.Starting);
+IF rtStarting.Q THEN
+	stsCurrentStep := 1000;
+END_IF
+
+rtStopping(CLK := stsState = E_PalletStationState.Stopping);
+IF rtStopping.Q THEN
+	stsCurrentStep := 2000;
+END_IF
+
+rtHoming(CLK := stsState = E_PalletStationState.Homing);
+IF rtHoming.Q THEN
+	stsCurrentStep := 4000;
+END_IF
+
+rtPalletPresent(CLK := inpPalletPresent AND stsState <> E_PalletStationState.Homing AND stsCurrentStep = 0);
+IF rtPalletPresent.Q THEN
+	stsCurrentStep := 3000;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Stopping" Id="{1cb79882-1e69-4491-abea-c356ba24106f}">
+      <Declaration><![CDATA[METHOD Stopping : BOOL
+VAR_INPUT
+END_VAR
+
+VAR
+	END_IFCASE: INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsCurrentStep OF
+	2000: //Clear RFID
+		RFID.cmd := E_RFIDCommand.Clear;
+		IF RFID.stsCurrentID = '' THEN
+			stsCurrentStep := 2010;
+		END_IF
+	2010: //Extend pallet stop
+		PalletStop.cmd := E_ActuatorCommand.Work;
+		IF PalletStop.stsState = E_ActuatorState.AtWork THEN
+			stsCurrentStep := 2020;
+		END_IF
+	2020: //Stop conveyor
+		Conveyor.cmd := E_AxisCommand.Stop;
+		IF Conveyor.stsVelocity = 0 THEN
+			stsCurrentStep := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_PalletStation">
+      <LineId Id="9" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="35" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Aborting">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Homing">
+      <LineId Id="6" Count="2" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="9" Count="6" />
+      <LineId Id="32" Count="4" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Map">
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.PalletReady.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Running">
+      <LineId Id="11" Count="0" />
+      <LineId Id="16" Count="3" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="27" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="32" Count="9" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="65" Count="3" />
+      <LineId Id="45" Count="13" />
+      <LineId Id="60" Count="1" />
+      <LineId Id="63" Count="1" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Simulate">
+      <LineId Id="7" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Starting">
+      <LineId Id="9" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="17" Count="2" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="34" Count="2" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.StateMachine">
+      <LineId Id="44" Count="0" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="48" Count="1" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="50" Count="4" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="35" Count="2" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Status">
+      <LineId Id="11" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="12" Count="3" />
+      <LineId Id="6" Count="2" />
+      <LineId Id="40" Count="4" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="39" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PalletStation.Stopping">
+      <LineId Id="29" Count="0" />
+      <LineId Id="7" Count="10" />
+      <LineId Id="19" Count="3" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

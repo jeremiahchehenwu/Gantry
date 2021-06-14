@@ -1,0 +1,192 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_Axis" Id="{801782d1-4023-4117-bad0-208e2b5bb926}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Axis EXTENDS FB_Device
+VAR_INPUT
+	Axis				: REFERENCE TO AXIS_REF;
+	cmd					: E_AxisCommand := E_AxisCommand.None;
+	
+	inpPosition			: LREAL;
+	inpVelocity			: LREAL := 500.0;
+	inpAcceleration		: LREAL := 100.0;
+	inpDeceleration		: LREAL := 100.0;
+END_VAR
+VAR_OUTPUT
+	stsState			: E_AxisState := E_AxisState.Off;
+	stsFaultCode		: DINT;
+	stsPowerOn			: BOOL;
+	stsPosition			: LREAL;
+	stsVelocity			: LREAL;
+END_VAR
+VAR
+	PowerOn				: MC_Power;
+	MoveAbs				: MC_MoveAbsolute;
+	MoveVel				: MC_MoveVelocity;
+	MoveStop			: MC_Stop;
+
+	PowerOnTimer		: TON;
+	StartTimer			: TON;
+	StopTimer			: TON;
+	PowerOnSimTime		: TIME := T#3S;
+	StartSimTime		: TIME := T#3S;
+	StopSimTime			: TIME := T#3S;
+	PowerOnFailTime		: TIME := T#5S;
+	StartFailTime		: TIME := T#5S;
+	StopFailTime		: TIME := T#5S;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[Map();
+Status();
+StateMachine();
+Control();]]></ST>
+    </Implementation>
+    <Method Name="Control" Id="{5ceeb8c4-6437-404b-91d7-5a4d22eb07ca}">
+      <Declaration><![CDATA[METHOD Control : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF stsState = E_AxisState.TurningOn THEN
+	PowerOn.Enable := TRUE;
+	PowerOn.Enable_Negative := TRUE;
+	PowerOn.Enable_Positive := TRUE;
+END_IF
+
+IF stsState = E_AxisState.TurningOff THEN
+	PowerOn.Enable := FALSE;
+	PowerOn.Enable_Negative := FALSE;
+	PowerOn.Enable_Positive := FALSE;
+END_IF
+
+IF stsState = E_AxisState.Stopping THEN
+	MoveStop.Execute := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Map" Id="{d1aa42fb-74eb-4c00-8dbe-3673a07cccec}">
+      <Declaration><![CDATA[METHOD Map : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MoveAbs(Axis := Axis, Position := inpPosition, Velocity := inpVelocity, Acceleration := inpAcceleration, Deceleration := inpDeceleration);
+MoveVel(Axis := Axis, Velocity := inpVelocity, Acceleration := inpAcceleration, Deceleration := inpDeceleration);
+MoveStop(Axis := Axis);
+PowerOn(Axis := Axis);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="StateMachine" Id="{fd7c0724-f298-4847-97d0-6e183c194278}">
+      <Declaration><![CDATA[METHOD StateMachine : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stsState OF
+	E_AxisState.Off:
+		IF cmd = E_AxisCommand.TurnOn THEN
+			stsState := E_AxisState.TurningOn;
+		END_IF
+	E_AxisState.TurningOn:
+		IF stsPowerOn THEN
+			stsState := E_AxisState.Ready;
+		END_IF
+	E_AxisState.Ready:
+		IF cmd = E_AxisCommand.ExecuteMoveAbs THEN
+			MoveAbs.Execute := TRUE;
+		ELSIF cmd = E_AxisCommand.ExecuteMoveVel THEN
+			MoveVel.Execute := TRUE;
+		ELSIF cmd = E_AxisCommand.Stop THEN
+			MoveAbs.Execute := FALSE;
+			MoveVel.Execute := FALSE;
+			stsState := E_AxisState.Stopping;
+		END_IF
+		IF MoveAbs.Busy THEN
+			MoveAbs.Execute := FALSE;
+			MoveVel.Execute := FALSE;
+			stsState := E_AxisState.Moving;
+		END_IF
+	E_AxisState.Moving:
+		IF MoveAbs.Done THEN
+			stsState := E_AxisState.Ready;
+		ELSIF cmd = E_AxisCommand.Stop THEN
+			stsState := E_AxisState.Stopping;
+		END_IF
+	E_AxisState.Stopping:
+		IF NOT MoveAbs.Busy THEN
+			MoveStop.Execute := FALSE;
+			stsState := E_AxisState.Ready;
+		END_IF
+	E_AxisState.TurningOff:
+		IF NOT stsPowerOn THEN
+			stsState := E_AxisState.Off;
+		END_IF
+END_CASE
+
+IF cmd = E_AxisCommand.TurnOff THEN
+	stsState := E_AxisState.TurningOff;
+END_IF
+
+cmd := E_AxisCommand.None;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="Status" Id="{95f76909-4766-4580-947d-ef2adccc66ce}">
+      <Declaration><![CDATA[METHOD Status : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stsPowerOn := PowerOn.Status;
+stsPosition := Axis.NcToPlc.ActPos;
+stsVelocity := Axis.NcToPlc.ActVelo;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Axis">
+      <LineId Id="53" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Axis.Control">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="15" Count="4" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="12" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Axis.Map">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="6" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Axis.StateMachine">
+      <LineId Id="6" Count="5" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="13" Count="4" />
+      <LineId Id="62" Count="2" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="50" Count="1" />
+      <LineId Id="21" Count="2" />
+      <LineId Id="56" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="39" Count="5" />
+      <LineId Id="52" Count="3" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="60" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Axis.Status">
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

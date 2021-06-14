@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <DUT Name="E_PalletStationCommand" Id="{c995f25b-6512-4e76-ab88-7d49baca79d6}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_PalletStationCommand :
+(
+	None 			:= 0,
+	Start			:= 1,
+	Stop			:= 2,
+	Home			:= 3,
+	Abort			:= 4
+) DINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>
