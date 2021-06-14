@@ -1,0 +1,24 @@
+Assumptions/disclaimers:
+	Simulation:
+		Project can run fully simulated. To start simulation, toggle Main.Start from false to true. Abort and Home commands are also available.
+		RFID simulates an ID of '12345'. PalletRecord[5] is simulated to have this ID so the system only updates this record when in simulation mode.
+		Part/pallet presence sensors are simulated using timers in conjunction with stopper, gantry, and conveyor statuses.
+	An array of moves or positions makes more sense for gantry positions but they were hardcoded to make it easier to simulate test project.  
+	Each EOAT can hold 2 bars. Basis for assumption: 2 bars must be placed in a single movement from the EOAT.
+	For part conveyor, a single part presence sensor detects 2 copper bars and reads false if either is not present (based on drawing in deck)
+	Conveyors run on servos
+	No safety code required for project
+	Home positions for each of the gantries are at opposite ends of the shared linear track.
+	Due to time constraints only a limited amount of fault recovery has been programmed.
+	Axis speeds were set fairly slow to better observe simulation.
+	Velocity, acceleration, and deceleration were hardcoded for all moves in order to maintain simplicity.
+
+Improvements:
+	Cycle time:
+		Coordinated motion of axes to smooth out paths to improve motion time.
+		Vary speed and acceleration of motions to minimize travel time where possible.
+		Move the gantry to pre-pick position before parts arrive when possible.
+		Coordinate Gantry 1 and Gantry 2 such that they can share the space over the pallet and place parts at the same time.
+	Resuming operation
+		Complete moves and track progress prior to unlocking doors for entry so that restart happens from a known position.
+		Depending on the process, complete the entire sequence (or entire assembly) before unlocking the door.
