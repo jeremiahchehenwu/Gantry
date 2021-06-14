@@ -1,10 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
   <POU Name="FB_Actuator" Id="{3cd68f66-e8c0-4a60-9389-8668b3a2b172}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_Actuator EXTENDS FB_Device
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Actuator
 VAR_INPUT
 	cmd					: E_ActuatorCommand := E_ActuatorCommand.None;
 	
+	inpSim				: BOOL := TRUE;
 	inpHome				AT %I* : BOOL;
 	inpWork				AT %I* : BOOL;
 END_VAR

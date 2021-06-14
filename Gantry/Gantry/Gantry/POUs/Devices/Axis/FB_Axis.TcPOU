@@ -1,11 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
   <POU Name="FB_Axis" Id="{801782d1-4023-4117-bad0-208e2b5bb926}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_Axis EXTENDS FB_Device
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Axis
 VAR_INPUT
 	Axis				: REFERENCE TO AXIS_REF;
 	cmd					: E_AxisCommand := E_AxisCommand.None;
 	
+	inpSim				: BOOL := TRUE;
 	inpPosition			: LREAL;
 	inpVelocity			: LREAL := 500.0;
 	inpAcceleration		: LREAL := 100.0;

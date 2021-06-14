@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
   <POU Name="FB_PartStation" Id="{21b06fcb-7bab-4e72-a22c-2c772da71df6}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_PartStation EXTENDS FB_Module IMPLEMENTS I_GantryPart
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PartStation IMPLEMENTS I_GantryPart
 VAR_INPUT
 	Axis				: REFERENCE TO AXIS_REF;
 	ipGantry			: I_GantryPart;

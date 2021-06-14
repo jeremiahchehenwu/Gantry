@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
   <POU Name="FB_Gantry" Id="{87b4792e-6bb9-438b-9c7c-ce879d852511}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_Gantry EXTENDS FB_Module IMPLEMENTS I_GantryPallet,I_GantryPart
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Gantry IMPLEMENTS I_GantryPallet,I_GantryPart
 VAR_INPUT
 	AxisX				: REFERENCE TO AXIS_REF;
 	AxisZ				: REFERENCE TO AXIS_REF;			

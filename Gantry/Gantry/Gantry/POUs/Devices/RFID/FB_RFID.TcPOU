@@ -1,11 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
   <POU Name="FB_RFID" Id="{e37777d5-682f-4821-a127-0aa1343bd3d1}" SpecialFunc="None">
-    <Declaration><![CDATA[FUNCTION_BLOCK FB_RFID EXTENDS FB_Device
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RFID
 VAR_INPUT
 	cmd					: E_RFIDCommand := E_RFIDCommand.None;
+	cmdReset			: BOOL;
 	inpSimID			: STRING := '12345';
 	
+	inpSim				: BOOL := TRUE;
 	inpID				AT %I* : STRING;
 END_VAR
 VAR_OUTPUT
