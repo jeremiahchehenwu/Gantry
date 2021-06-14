@@ -1,0 +1,22 @@
+#These are Beckhoff/Visual Studio files that we want to ignore
+
+#Visual Studio
+*.project.*
+*.~u
+*.suo
+*.sln
+
+#Beckhoff/TwinCAT files
+*.bak
+*.tmc
+*.tmcRefac
+*.tpy
+*.tclrs
+*.compileinfo
+*.tfzip
+*.tpzip
+
+#Directories to ignore
+**_Boot/
+**_CompileInfo/
+**_Libraries/
